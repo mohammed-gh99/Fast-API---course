@@ -36,10 +36,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 @app.post("/token")
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session)
 ) -> Token:
 
-    if form_data.username != fake_user["username"]:
+    statement = select(UserDB).where(
+        UserDB.username == form_data.username
+    )
+
+    db_user = session.exec(statement).first()
+
+    if not db_user:
         raise HTTPException(
             status_code=401,
             detail="Incorrect username or password"
@@ -47,7 +54,7 @@ async def login_for_access_token(
 
     if not password_hash.verify(
         form_data.password,
-        fake_user["password_hash"]
+        db_user.password_hash
     ):
         raise HTTPException(
             status_code=401,
@@ -59,7 +66,10 @@ async def login_for_access_token(
     )
 
     access_token = create_access_token(
-        data={"sub": form_data.username, "role": fake_user["role"]},
+        data={
+            "sub": db_user.username,
+            "role": db_user.role
+        },
         expires_delta=access_token_expires
     )
 
@@ -67,7 +77,6 @@ async def login_for_access_token(
         access_token=access_token,
         token_type="bearer"
     )
-
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=401,
@@ -154,6 +163,13 @@ with Session(engine) as session:
     if not db_user:
         session.add(user)
         session.commit()
+with Session(engine) as session:
+    db_user = session.exec(select(UserDB).where(UserDB.username == "mohammed")).first()
+    if db_user:
+        print(f"User: {db_user.username}, Role: {db_user.role}")
+    else:
+        print("User not found")
+    
 
 
 def get_session():

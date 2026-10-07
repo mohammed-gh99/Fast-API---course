@@ -1,1 +1,9 @@
-* text=auto
+fastapi
+uvicorn
+sqlmodel
+pydantic
+pwdlib
+PyJWT
+python-multipart
+python-dotenv
+

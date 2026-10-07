@@ -14,16 +14,45 @@ SECRET_KEY = "3891422fe5e89b7516b449b534423076cd615d1e5ef4b4712e18dff3a735f276"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-fake_user = {
-    "username": "mohammed",
-    "password_hash": password_hash.hash("12345678"),
-    "role": "user"
-}
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+class JokeDB(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    author: str
+    joke: str
+    source: str
+
+class UserDB(SQLModel, table=True):
+    id:int | None = Field(default=None, primary_key=True)
+    username:str
+    password_hash:str
+    role:str
+
+class JokePublic(BaseModel):
+    id: int
+    author: str
+    joke: str
+    source: str
+
+class JokeUpdate(BaseModel):
+    author: str | None = None
+    joke: str | None = None
+    source: str | None = None
+
+sqlite_file_name = "database.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+
+engine = create_engine(sqlite_url, echo=True)
+
+SQLModel.metadata.create_all(engine)
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+    
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
@@ -123,35 +152,9 @@ async def read_users_me(
 ):
     return current_user
 
-class JokeDB(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    author: str
-    joke: str
-    source: str
 
-class UserDB(SQLModel, table=True):
-    id:int | None = Field(default=None, primary_key=True)
-    username:str
-    password_hash:str
-    role:str
 
-class JokePublic(BaseModel):
-    id: int
-    author: str
-    joke: str
-    source: str
 
-class JokeUpdate(BaseModel):
-    author: str | None = None
-    joke: str | None = None
-    source: str | None = None
-
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-engine = create_engine(sqlite_url, echo=True)
-
-SQLModel.metadata.create_all(engine)
 
 user = UserDB(
     username='mohammed',
@@ -172,9 +175,7 @@ with Session(engine) as session:
     
 
 
-def get_session():
-    with Session(engine) as session:
-        yield session
+
 
 class Joke(BaseModel):
     author: str = PydanticField(min_length=3, max_length=80)

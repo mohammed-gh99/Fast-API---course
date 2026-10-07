@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI,HTTPException,Depends,Query
 from pydantic import BaseModel,Field as PydanticField
 from sqlmodel import SQLModel , Field , Session , create_engine , select
@@ -6,18 +8,16 @@ from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
 import jwt
 from jwt.exceptions import InvalidTokenError
-import os
-from dotenv import load_dotenv
-
-
-app = FastAPI()
-password_hash = PasswordHash.recommended()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set")
+
+app = FastAPI()
+password_hash = PasswordHash.recommended()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -34,7 +34,7 @@ class JokeDB(SQLModel, table=True):
 
 class UserDB(SQLModel, table=True):
     id:int | None = Field(default=None, primary_key=True)
-    username:str
+    username:str = Field(unique=True)
     password_hash:str
     role:str
 

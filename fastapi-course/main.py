@@ -6,11 +6,18 @@ from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
 import jwt
 from jwt.exceptions import InvalidTokenError
+import os
+from dotenv import load_dotenv
+
 
 app = FastAPI()
 password_hash = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-SECRET_KEY = "3891422fe5e89b7516b449b534423076cd615d1e5ef4b4712e18dff3a735f276"
+
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -41,6 +48,11 @@ class JokeUpdate(BaseModel):
     author: str | None = None
     joke: str | None = None
     source: str | None = None
+
+class UserPublic(BaseModel):
+    id: int
+    username: str
+    role: str
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -96,8 +108,7 @@ async def login_for_access_token(
 
     access_token = create_access_token(
         data={
-            "sub": db_user.username,
-            "role": db_user.role
+            "sub": db_user.username
         },
         expires_delta=access_token_expires
     )
@@ -106,7 +117,7 @@ async def login_for_access_token(
         access_token=access_token,
         token_type="bearer"
     )
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme),session: Session = Depends(get_session)):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -121,24 +132,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         )
 
         username = payload.get("sub")
-        role = payload.get("role")
-
-        if username is None or role is None:
+        
+        if username is None:
             raise credentials_exception
 
     except InvalidTokenError:
         raise credentials_exception
-
-    if username != fake_user["username"] or role != fake_user["role"]:
+    statement = select(UserDB).where(UserDB.username == username)
+    db_user = session.exec(statement).first()
+    if db_user is None:
         raise credentials_exception
 
-    return {
-    "username": username,
-    "role": role
-}
+    return db_user
 
 async def require_admin(current_user = Depends(get_current_user)):
-    if current_user["role"] != "admin":
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=403,
             detail="Not enough permissions"
@@ -146,36 +154,11 @@ async def require_admin(current_user = Depends(get_current_user)):
 
     return current_user
 
-@app.get("/users/me")
+@app.get("/users/me", response_model=UserPublic)
 async def read_users_me(
     current_user = Depends(get_current_user)
 ):
     return current_user
-
-
-
-
-
-user = UserDB(
-    username='mohammed',
-    password_hash=password_hash.hash("12345678"),
-    role="user"
-)
-with Session(engine) as session:
-    db_user = session.exec(select(UserDB).where(UserDB.username == user.username)).first()
-    if not db_user:
-        session.add(user)
-        session.commit()
-with Session(engine) as session:
-    db_user = session.exec(select(UserDB).where(UserDB.username == "mohammed")).first()
-    if db_user:
-        print(f"User: {db_user.username}, Role: {db_user.role}")
-    else:
-        print("User not found")
-    
-
-
-
 
 class Joke(BaseModel):
     author: str = PydanticField(min_length=3, max_length=80)
